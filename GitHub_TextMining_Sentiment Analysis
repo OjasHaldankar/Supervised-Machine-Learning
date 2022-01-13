@@ -1,0 +1,112 @@
+#!/usr/bin/env python
+# coding: utf-8
+
+# #  Text Mining : Sentiment Analysis
+
+
+# ###  Amazon Product Review [Apple Iphone 11]
+
+.........................................................................................
+
+# Importing Libraries
+import numpy as np 
+import pandas as pd 
+import string 
+import spacy
+from matplotlib.pyplot import imread
+from matplotlib import pyplot as plt
+
+
+# Reading the dataset
+# Apple_iphone_11_reviews on Amazon
+data = pd.read_json('https://query.data.world/s/utslhrbtntbuburrzprz3xji6o4e6l')
+data.head()
+
+# Creating Dataframe
+reviews = pd.DataFrame(data['review_text'])
+reviews
+
+text = reviews.rename(columns= {reviews.columns[0]: 'x'})
+text.head()
+
+text.shape
+
+# To remove the leading & trailing characters
+text = [x.strip() for x in text.x]
+
+# To remove empty strings
+text = [x for x in text if x]
+
+# Tokenization
+from nltk import tokenize
+emotion = tokenize.sent_tokenize(" ".join(text))
+emotion[:10]
+
+# Creating a dataframe
+emotion_df = pd.DataFrame(emotion, columns=['Sentence'])
+emotion_df
+
+
+# Emotion Mining / Sentiment Value
+
+value = pd.read_csv('Afinn_scores.csv')
+affinity_score = value.set_index('word')['value'].to_dict() 
+
+# Using 'affinity_scores' as Sentiment Lexicon & calculating sentiment score for entire original sentence
+lib = spacy.load('en_core_web_sm')
+sentiment_lex = affinity_scores
+
+def analyse_sentiment(text: str = None):
+    sentiment_score = 0
+    if text:
+        sentence = lib(text)
+        for word in sentence:
+            sentiment_score += sentiment_lex.get(word.lemma_, 0)
+    return sentiment_score 
+
+# test score
+analyse_sentiment(text = 'awesome')
+
+# test score
+analyse_sentiment(text = 'careless')
+
+# Creating a new column for showing Sentiment scores for individual sentences
+emotion_df['Sentiment_value'] = emotion_df['Sentence'].apply(analyse_sentiment)
+
+# Creating a column for showing count of words in the sentence
+emotion_df['Word_count'] = emotion_df['Sentence'].str.split().apply(len)
+
+# Table with 'Sentiment values' & 'Count of words'
+emotion_df
+
+# Top 25 sentences in terms of the highest sentiment scores
+emotion_df.sort_values(by='Sentiment_value', ascending= False).head(25) 
+
+# Sentiment values of less than zer
+emotion_df[emotion_df['Sentiment_value']<0].head(15) 
+
+emotion_df['Sentiment_value'].describe()
+
+
+# Plotting the result
+# Distiribution Plot
+emotion_df['index1'] = range(0, len(emotion_df))
+import seaborn as sns
+import matplotlib.pyplot as plt
+plt.figure(figsize= (10, 8))
+sns.distplot(emotion_df['Sentiment_value'])
+
+
+# Lineplot
+plt.figure(figsize=(18, 10))
+sns.lineplot(y='Sentiment_value', x='index1', data= emotion_df) 
+
+
+# Scatter Plot
+plt.figure(figsize= (12,9))
+plt.scatter(x = 'Word_count', y = 'Sentiment_value', data= emotion_df)
+plt.title('Word Conut vs Sentiment Value Plot')
+plt.xlabel('Word Count')
+plt.ylabel('Sentiment Value')
+plt.show()
+
