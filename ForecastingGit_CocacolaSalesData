@@ -1,0 +1,145 @@
+#!/usr/bin/env python
+# coding: utf-8
+
+# #  FORECASTING
+
+# ###  Example : CocaCola Sales Dataset
+
+
+# Importing basic libraries
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+import statsmodels.formula.api as smf
+
+# Read the file
+data = pd.read_excel('CocaCola_Sales_Rawdata.xlsx')
+data.head(10)
+
+data.shape
+
+# Line Plot
+data['Sales'].plot()
+plt.show()
+
+#Histogram
+data['Sales'].hist()
+
+# Kernel Density Plot
+data['Sales'].plot(kind = 'kde')
+
+# Lag Plot
+from pandas import read_excel
+data = read_excel('CocaCola_Sales_Rawdata.xlsx', header=0, index_col=0, parse_dates=True)
+from pandas.plotting import lag_plot
+lag_plot(data['Sales'])
+
+
+# Creating 4 dummy variables for Quarters i.e. Q1, Q2, Q3, Q4 
+quarter = ['Q1','Q2','Q3','Q4']
+n = data['Quarter'][0]               # For operating on all rows
+n[0:2]
+
+data['quarter']=0
+
+for i in range(42):
+    n= data['Quarter'][i]
+    data['quarter'][i]=n[0:2]
+    
+dummy_Q = pd.DataFrame(pd.get_dummies(data['quarter']))
+dummy_Q.head()
+
+
+df = pd.DataFrame()
+df['log_Sales'] =  np.log(data['Sales'])
+t_values = np.arange(1, 43)
+df['t'] = t_values
+df['t_square'] = df['t'] * df['t']
+df.head()
+
+final_df = pd.concat([data, df, dummy_Q], axis=1)
+final_df.head(10)
+
+final_df.shape
+
+# Boxplot
+sns.boxplot(x="quarter", y= "Sales", data= final_df)
+
+# Lineplot
+plt.figure(figsize=(12,3))
+sns.lineplot(x="quarter", y="Sales", data= final_df)
+
+# Time Series Analysis Plots
+from statsmodels.tsa.seasonal import seasonal_decompose                   
+ts_decompose = seasonal_decompose(final_df['Sales'], freq= 4)
+ts_decompose.plot()
+plt.show() 
+
+
+# Creating Training & Testing Data
+Train1 = final_df.head(35)
+Test1 = final_df.tail(7)
+
+
+# Linear Model
+linear_model1 = smf.ols('Sales~t',data=Train1).fit()
+pred_linear1 =  pd.Series(linear_model1.predict(pd.DataFrame(Test1['t'])))
+rmse_linear1 = np.sqrt(np.mean((np.array(Test1['Sales'])-np.array(pred_linear1))**2)) 
+rmse_linear1
+
+
+#Exponential Model
+Exp1 = smf.ols('log_Sales~t',data=Train1).fit()
+pred_Exp1 = pd.Series(Exp1.predict(pd.DataFrame(Test1['t'])))
+rmse_Exp1 = np.sqrt(np.mean((np.array(Test1['Sales'])-np.array(np.exp(pred_Exp1)))**2))
+rmse_Exp1 
+
+
+#Quadratic Model
+Quad1 = smf.ols('Sales~t+t_square',data=Train1).fit()
+pred_Quad1 = pd.Series(Quad1.predict(Test1[["t","t_square"]]))
+rmse_Quad1 = np.sqrt(np.mean((np.array(Test1['Sales'])-np.array(pred_Quad1))**2))
+rmse_Quad1 
+
+
+#Additive seasonality model
+add_sea1 = smf.ols('Sales~Q1+Q2+Q3+Q4',data=Train1).fit()
+pred_add_sea1 = pd.Series(add_sea1.predict(Test1[['Q1','Q2','Q3','Q4']]))
+rmse_add_sea1 = np.sqrt(np.mean((np.array(Test1['Sales'])-np.array(pred_add_sea1))**2))
+rmse_add_sea1 
+
+
+#Additive seasonality with Quadratic model
+add_sea_Quad1 = smf.ols('Sales~t+t_square+Q1+Q2+Q3+Q4',data=Train1).fit()
+pred_add_sea_Quad1 = pd.Series(add_sea_Quad1.predict(Test1[['Q1','Q2','Q3','Q4','t','t_square']]))
+rmse_add_sea_Quad1 = np.sqrt(np.mean((np.array(Test1['Sales'])-np.array(pred_add_sea_Quad1))**2))
+rmse_add_sea_Quad1
+
+
+#Multiplicative seasonality model
+mult_sea1 = smf.ols('log_Sales~Q1+Q2+Q3+Q4',data=Train1).fit()
+pred_mult_sea1 = pd.Series(mult_sea1.predict(Test1))
+rmse_mult_sea1 = np.sqrt(np.mean((np.array(Test1['Sales'])-np.array(pred_mult_sea1))**2))
+rmse_mult_sea1 
+
+
+#Multiplicative Additive seasonality model
+mult_add_sea1 = smf.ols('log_Sales~t+Q1+Q2+Q3+Q4',data=Train1).fit()
+pred_mult_add_sea1 = pd.Series(mult_add_sea1.predict(Test1))
+rmse_mult_add_sea1 = np.sqrt(np.mean((np.array(Test1['Sales'])-np.array(pred_mult_add_sea1))**2))
+rmse_mult_add_sea1 
+
+
+# Compairing the resultant RMSE values 
+result = {"MODEL":pd.Series(["rmse_linear","rmse_Exp","rmse_Quad","rmse_add_sea","rmse_add_sea_quad","rmse_Mult_sea"]),"RMSE_Values":pd.Series([rmse_linear1, rmse_Exp1, rmse_Quad1, rmse_add_sea1, rmse_add_sea_Quad1, rmse_mult_sea1])}
+result_rmse= pd.DataFrame(result)
+result_rmse.sort_values(['RMSE_Values']) 
+
+
+# Selecting 'Additive Seasonality with Quadratic model' as it is having the lowest RMSE value of 309.46 & therefore it will give the least error
+
+# Resultant Model Equation
+# ~~~~~~~~~~~~~~~~~~~~~~~~ add_sea1 = smf.ols('Sales~Q1+Q2+Q3+Q4',data=Train1).fit()  ~~~~~~~~~~~~~~~~~~~~~
+
+
