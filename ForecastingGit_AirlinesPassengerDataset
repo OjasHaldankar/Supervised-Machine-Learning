@@ -1,0 +1,151 @@
+#!/usr/bin/env python
+# coding: utf-8
+
+#  Forecasting
+
+# ###  Example : Airlines Passenger Dataset
+
+
+# Importing basic libraries
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+import statsmodels.formula.api as smf
+
+# Importing the dataset
+air = pd.read_excel('Airlines+Data.xlsx')
+air.head()
+
+air.shape
+
+# Line Plot
+plt.figure(figsize= [8,5])
+air['Passengers'].plot()
+plt.show()
+
+# Histogram
+air['Passengers'].hist()
+
+# Kernal Density Plot
+air['Passengers'].plot(kind = 'kde')
+
+from pandas.plotting import lag_plot
+lag_plot(air['Passengers'])
+
+
+df_air = pd.DataFrame()
+df_air['log_Passengers'] =  np.log(air['Passengers'])
+t = np.arange(1, 97)
+df_air['t_pass'] = t
+df_air['t_sq_pass'] = df_air['t_pass'] * df_air['t_pass']
+df_air.head()
+
+df_air.shape
+
+
+# Extracting Month
+air["Date"] = pd.to_datetime(air.Month,format="%y-%b-%d")
+#look for c standard format codes
+
+air["month"] = air.Date.dt.strftime("%b")         # month extraction
+air["year"] = air.Date.dt.strftime("%Y")          # year extraction
+air["day"] = air.Date.dt.strftime("%d")           # day extraction
+
+
+# Creating dummy values for 12 months
+air_dummy = pd.get_dummies(air['month'])
+air_dummy.head()
+
+final_pass = pd.concat([air, df_air, air_dummy], axis=1)
+final_pass.head()
+
+# Heatmap
+plt.figure(figsize=(15, 10))
+heatmap_month = pd.pivot_table(data = final_pass, values="Passengers", index="year", columns="month", aggfunc="mean", fill_value=0)
+sns.heatmap(heatmap_month, annot=True, fmt="g") 
+
+# Boxplot 
+plt.figure(figsize=(15,10))
+plt.subplot(211)
+sns.boxplot(x="month", y="Passengers", data=final_pass)
+plt.subplot(212)
+sns.boxplot(x="year", y="Passengers", data=final_pass)
+
+# Lineplot
+plt.figure(figsize=(12,3))
+sns.lineplot(x="month", y="Passengers", data=final_pass)
+
+
+# Time Series Analysis Plots
+from statsmodels.tsa.seasonal import seasonal_decompose                   
+
+ts_decompose_air = seasonal_decompose(final_pass['Passengers'], freq= 12)
+ts_decompose_air.plot()
+plt.show() 
+
+# Creating Training & Testing Data
+Train = final_pass.head(86)
+Test = final_pass.tail(10)
+
+
+# Linear Model
+linear_model = smf.ols('Passengers~t_pass',data=Train).fit()
+pred_linear =  pd.Series(linear_model.predict(pd.DataFrame(Test['t_pass'])))
+rmse_linear = np.sqrt(np.mean((np.array(Test['Passengers'])-np.array(pred_linear))**2)) 
+rmse_linear
+
+
+#Exponential Model
+Exp = smf.ols('log_Passengers~t_pass',data=Train).fit()
+pred_Exp = pd.Series(Exp.predict(pd.DataFrame(Test['t_pass'])))
+rmse_Exp = np.sqrt(np.mean((np.array(Test['Passengers'])-np.array(np.exp(pred_Exp)))**2))
+rmse_Exp 
+
+
+#Quadratic Model
+Quad = smf.ols('Passengers~t_pass+t_sq_pass',data=Train).fit()
+pred_Quad = pd.Series(Quad.predict(Test[["t_pass","t_sq_pass"]]))
+rmse_Quad = np.sqrt(np.mean((np.array(Test['Passengers'])-np.array(pred_Quad))**2))
+rmse_Quad 
+
+
+#Additive seasonality Model
+add_sea = smf.ols('Passengers~Jan+Feb+Mar+Apr+May+Jun+Jul+Aug+Sep+Oct+Nov+Dec',data=Train).fit()
+pred_add_sea = pd.Series(add_sea.predict(Test[['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']]))
+rmse_add_sea = np.sqrt(np.mean((np.array(Test['Passengers'])-np.array(pred_add_sea))**2))
+rmse_add_sea
+
+
+#Additive Seasonality with Quadratic Model
+add_sea_Quad = smf.ols('Passengers~t_pass+t_sq_pass+Jan+Feb+Mar+Apr+May+Jun+Jul+Aug+Sep+Oct+Nov+Dec',data=Train).fit()
+pred_add_sea_quad = pd.Series(add_sea_Quad.predict(Test[['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov', 'Dec','t_pass','t_sq_pass']]))
+rmse_add_sea_quad = np.sqrt(np.mean((np.array(Test['Passengers'])-np.array(pred_add_sea_quad))**2))
+rmse_add_sea_quad 
+
+
+# Multiplicative Seasonality Model 
+Mul_sea = smf.ols('log_Passengers~Jan+Feb+Mar+Apr+May+Jun+Jul+Aug+Sep+Oct+Nov+Dec',data = Train).fit()
+pred_Mult_sea = pd.Series(Mul_sea.predict(Test))
+rmse_Mult_sea = np.sqrt(np.mean((np.array(Test['Passengers'])-np.array(np.exp(pred_Mult_sea)))**2))
+rmse_Mult_sea 
+
+
+#Multiplicative Additive Seasonality Model
+Mul_Add_sea = smf.ols('log_Passengers~t_pass+Jan+Feb+Mar+Apr+May+Jun+Jul+Aug+Sep+Oct+Nov+Dec',data = Train).fit()
+pred_Mult_add_sea = pd.Series(Mul_Add_sea.predict(Test))
+rmse_Mult_add_sea = np.sqrt(np.mean((np.array(Test['Passengers'])-np.array(np.exp(pred_Mult_add_sea)))**2))
+rmse_Mult_add_sea  
+
+
+# Compairing the resultant RMSE values
+result1 = {"MODEL":pd.Series(["rmse_linear","rmse_Exp","rmse_Quad","rmse_add_sea","rmse_add_sea_quad","rmse_Mult_sea","rmse_Mult_add_sea"]),"RMSE_Values":pd.Series([rmse_linear, rmse_Exp, rmse_Quad, rmse_add_sea, rmse_add_sea_quad, rmse_Mult_sea, rmse_Mult_add_sea])}
+result1_rmse= pd.DataFrame(result1)
+result1_rmse.sort_values(['RMSE_Values']) 
+
+
+# Selecting 'Multiplicative Additive Seasonality Model' as it is having the lowest RMSE value of 11.264 
+
+# Resultant Model Equation
+# ~~ Mul_Add_sea = smf.ols('log_Passengers~t_pass+Jan+Feb+Mar+Apr+May+Jun+Jul+Aug+Sep+Oct+Nov+Dec',data = Train).fit() ~~
+
